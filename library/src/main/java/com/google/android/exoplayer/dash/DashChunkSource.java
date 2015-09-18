@@ -468,9 +468,27 @@ public class DashChunkSource implements ChunkSource, Output {
       return;
     }
 
-    int segmentNum = queue.isEmpty() ? representationHolder.getSegmentNum(seekPositionUs)
-          : startingNewPeriod ? representationHolder.getFirstAvailableSegmentNum()
-          : queue.get(out.queueSize - 1).chunkIndex + 1;
+    // CASTLABS IMPROVEMENT
+    //
+    // A stream can contain different startNumbers in the dash Representations.
+    // ExoPlayer is not supporting that case.
+    // This improvement allows to have different startNumbers on the different Dash Representations.
+    int segmentNum = representationHolder.getSegmentNum(seekPositionUs);
+    if (!queue.isEmpty()) {
+      if (startingNewPeriod) {
+        segmentNum = representationHolder.getFirstAvailableSegmentNum();
+      } else {
+        segmentNum = queue.get(out.queueSize - 1).chunkIndex + 1;
+        if (queue.get(out.queueSize - 1).format.id != selectedFormat.id) {
+          // Different representations may have different startNumbers, the segmentNum needs to be adapted
+          int queueStartNum = periodHolder.representationHolders.get(queue.get(out.queueSize -1).format.id).getFirstAvailableSegmentNum();
+          int formatStartNum = periodHolder.representationHolders.get(selectedFormat.id).getFirstAvailableSegmentNum();
+          segmentNum += formatStartNum - queueStartNum;
+        }
+      }
+    }
+    // End of CASTLABS IMPROVEMENT
+
     Chunk nextMediaChunk = newMediaChunk(periodHolder, representationHolder, dataSource,
         mediaFormat, segmentNum, evaluation.trigger);
     lastChunkWasInitialization = false;
