@@ -10,48 +10,26 @@ adaptive playbacks. Unlike the MediaPlayer API, ExoPlayer is easy to
 customize and extend, and can be updated through Play Store application
 updates.
 
-## News ##
+## castLabs ExoPlayer Fork ##
 
-Read news, hints and tips on the [news][] page.
+This a fork of the original ExoPlayer project maintained by castLabs GmbH.
 
-[news]: https://google.github.io/ExoPlayer/news.html
+For the original project please visit [google/ExoPlayer](https://github.com/google/ExoPlayer).
 
-## Documentation ##
-
-* The [developer guide][] provides a wealth of information to help you get
-started.
-* The [class reference][] documents the ExoPlayer library classes.
-* The [release notes][] document the major changes in each release.
-
-[developer guide]: https://google.github.io/ExoPlayer/guide.html
-[class reference]: https://google.github.io/ExoPlayer/doc/reference
-[release notes]: https://github.com/google/ExoPlayer/blob/dev/RELEASENOTES.md
+This README.md is a modified version of the original.
 
 ## Project branches ##
 
-  * The [master][] branch holds the most recent minor release.
-  * Most development work happens on the [dev][] branch.
+  * The [master][] branch is always synchronized with the original google/ExoPlayer branch.
+  * The [dev][] branch is always synchronized with the original google/ExoPlayer branch.
+  * Most development work happens on the [castlabs/dev][] branch.
+  * The [castlabs/production][] branch is the stable release of ExoPlayer by castLabs GmbH.
   * Additional development branches may be established for major features.
 
-[master]: https://github.com/google/ExoPlayer/tree/master
-[dev]: https://github.com/google/ExoPlayer/tree/dev
-
-## Using Eclipse ##
-
-The repository includes Eclipse projects for both the ExoPlayer library and its
-accompanying demo application. To get started:
-
-  1. Install Eclipse and setup the [Android SDK][].
-
-  1. Open Eclipse and navigate to File->Import->General->Existing Projects into
-     Workspace.
-
-  1. Select the root directory of the repository.
-
-  1. Import the ExoPlayerDemo and ExoPlayerLib projects.
-
-[Android SDK]: http://developer.android.com/sdk/index.html
-
+[master]: https://github.com/castlabs/ExoPlayer/tree/master
+[dev]: https://github.com/castlabs/ExoPlayer/tree/dev
+[castlabs/dev]: https://github.com/castlabs/ExoPlayer/tree/dev
+[castlabs/production]: https://github.com/castlabs/ExoPlayer/tree/dev
 
 ## Using Gradle ##
 
@@ -74,11 +52,3 @@ If you want to use ExoPlayer as a jar, run:
 ```
 
 and copy library.jar to the libs-folder of your new project.
-
-The project is also available on [jCenter](https://bintray.com/google/exoplayer/exoplayer/view):
-
-```
-compile 'com.google.android.exoplayer:exoplayer:rX.X.X'
-```
-
-Where `rX.X.X` should be replaced with the desired version.
