@@ -18,6 +18,7 @@ package com.google.android.exoplayer.smoothstreaming;
 import com.google.android.exoplayer.BehindLiveWindowException;
 import com.google.android.exoplayer.C;
 import com.google.android.exoplayer.MediaFormat;
+import com.google.android.exoplayer.TimeRange;
 import com.google.android.exoplayer.chunk.Chunk;
 import com.google.android.exoplayer.chunk.ChunkExtractorWrapper;
 import com.google.android.exoplayer.chunk.ChunkOperationHolder;
@@ -43,6 +44,7 @@ import com.google.android.exoplayer.util.ManifestFetcher;
 import com.google.android.exoplayer.util.MimeTypes;
 
 import android.net.Uri;
+import android.os.Handler;
 import android.os.SystemClock;
 import android.util.Base64;
 import android.util.SparseArray;
@@ -61,6 +63,25 @@ public class SmoothStreamingChunkSource implements ChunkSource,
 
   private static final int MINIMUM_MANIFEST_REFRESH_PERIOD_MS = 5000;
   private static final int INITIALIZATION_VECTOR_SIZE = 8;
+
+  /**
+   * Interface definition for a callback to be notified of {@link SmoothStreamingChunkSource} events.
+   */
+  public interface EventListener {
+
+    /**
+     * Invoked when the available seek range of the stream has changed.
+     *
+     * @param availableRange The range which specifies available content that can be seeked to.
+     */
+    public void onAvailableRangeChanged(TimeRange availableRange);
+
+  }
+
+  private final Handler eventHandler;
+  private final EventListener eventListener;
+  private TimeRange availableRange;
+  private boolean seekToLiveEdge;
 
   private final SmoothStreamingTrackSelector trackSelector;
   private final DataSource dataSource;
@@ -105,9 +126,10 @@ public class SmoothStreamingChunkSource implements ChunkSource,
    */
   public SmoothStreamingChunkSource(ManifestFetcher<SmoothStreamingManifest> manifestFetcher,
       SmoothStreamingTrackSelector trackSelector, DataSource dataSource,
-      FormatEvaluator adaptiveFormatEvaluator, long liveEdgeLatencyMs) {
+      FormatEvaluator adaptiveFormatEvaluator, long liveEdgeLatencyMs,
+      Handler eventHandler, EventListener eventListener) {
     this(manifestFetcher, manifestFetcher.getManifest(), trackSelector, dataSource,
-        adaptiveFormatEvaluator, liveEdgeLatencyMs);
+        adaptiveFormatEvaluator, liveEdgeLatencyMs, eventHandler, eventListener);
   }
 
   /**
@@ -120,13 +142,17 @@ public class SmoothStreamingChunkSource implements ChunkSource,
    */
   public SmoothStreamingChunkSource(SmoothStreamingManifest manifest,
       SmoothStreamingTrackSelector trackSelector, DataSource dataSource,
-      FormatEvaluator adaptiveFormatEvaluator) {
-    this(null, manifest, trackSelector, dataSource, adaptiveFormatEvaluator, 0);
+      FormatEvaluator adaptiveFormatEvaluator, Handler eventHandler, EventListener eventListener) {
+    this(null, manifest, trackSelector, dataSource, adaptiveFormatEvaluator, 0,
+      eventHandler, eventListener);
   }
 
   private SmoothStreamingChunkSource(ManifestFetcher<SmoothStreamingManifest> manifestFetcher,
       SmoothStreamingManifest initialManifest, SmoothStreamingTrackSelector trackSelector,
-      DataSource dataSource, FormatEvaluator adaptiveFormatEvaluator, long liveEdgeLatencyMs) {
+      DataSource dataSource, FormatEvaluator adaptiveFormatEvaluator, long liveEdgeLatencyMs,
+      Handler eventHandler, EventListener eventListener) {
+    this.eventHandler = eventHandler;
+    this.eventListener = eventListener;
     this.manifestFetcher = manifestFetcher;
     this.currentManifest = initialManifest;
     this.trackSelector = trackSelector;
@@ -138,6 +164,7 @@ public class SmoothStreamingChunkSource implements ChunkSource,
     extractorWrappers = new SparseArray<>();
     mediaFormats = new SparseArray<>();
     live = initialManifest.isLive;
+    seekToLiveEdge = true;
 
     ProtectionElement protectionElement = initialManifest.protectionElement;
     if (protectionElement != null) {
@@ -195,6 +222,14 @@ public class SmoothStreamingChunkSource implements ChunkSource,
     if (manifestFetcher != null) {
       manifestFetcher.enable();
     }
+    // Update the available range.
+    if(currentManifest != null) {
+      TimeRange newAvailableRange = getAvailableRange();
+      if (availableRange == null || !availableRange.equals(newAvailableRange)) {
+        availableRange = newAvailableRange;
+        notifyAvailableRangeChanged(availableRange);
+      }
+    }
   }
 
   @Override
@@ -225,6 +260,13 @@ public class SmoothStreamingChunkSource implements ChunkSource,
       }
       currentManifest = newManifest;
       needManifestRefresh = false;
+
+      // Update the available range.
+      TimeRange newAvailableRange = getAvailableRange();
+      if (availableRange == null || !availableRange.equals(newAvailableRange)) {
+        availableRange = newAvailableRange;
+        notifyAvailableRangeChanged(availableRange);
+      }
     }
 
     if (needManifestRefresh && (SystemClock.elapsedRealtime()
@@ -278,8 +320,9 @@ public class SmoothStreamingChunkSource implements ChunkSource,
 
     int chunkIndex;
     if (queue.isEmpty()) {
-      if (live) {
+      if (live && seekToLiveEdge) {
         seekPositionUs = getLiveSeekPosition(currentManifest, liveEdgeLatencyUs);
+        seekToLiveEdge = false;
       }
       chunkIndex = streamElement.getChunkIndex(seekPositionUs);
     } else {
@@ -342,6 +385,7 @@ public class SmoothStreamingChunkSource implements ChunkSource,
     }
     evaluation.format = null;
     fatalError = null;
+    seekToLiveEdge = true;
   }
 
   // SmoothStreamingTrackSelector.Output implementation.
@@ -436,6 +480,26 @@ public class SmoothStreamingChunkSource implements ChunkSource,
     mediaFormats.put(manifestTrackKey, mediaFormat);
     extractorWrappers.put(manifestTrackKey, new ChunkExtractorWrapper(mp4Extractor));
     return mediaFormat;
+  }
+
+  private void notifyAvailableRangeChanged(final TimeRange seekRange) {
+    if (eventHandler != null && eventListener != null) {
+      eventHandler.post(new Runnable() {
+        @Override
+        public void run() {
+          eventListener.onAvailableRangeChanged(seekRange);
+        }
+      });
+    }
+  }
+
+  private TimeRange getAvailableRange() {
+    if(currentManifest.isLive){
+      long livePosition = getLiveSeekPosition(currentManifest, liveEdgeLatencyUs);
+      return new TimeRange.StaticTimeRange(livePosition - currentManifest.dvrWindowLengthUs, livePosition);
+    }else{
+      return new TimeRange.StaticTimeRange(0, currentManifest.durationUs);
+    }
   }
 
   /**
