@@ -335,14 +335,12 @@ public class SmoothStreamingChunkSource implements ChunkSource,
       fatalError = new BehindLiveWindowException();
       return;
     } else if (currentManifest.isLive) {
+      // Always mark for manifest refresh so the seek range gets updated
+      // also in case we are not on the live edge of the stream.
+      needManifestRefresh = true;
       if (chunkIndex >= streamElement.chunkCount) {
         // This is beyond the last chunk in the current manifest.
-        needManifestRefresh = true;
         return;
-      } else if (chunkIndex == streamElement.chunkCount - 1) {
-        // This is the last chunk in the current manifest. Mark the manifest as being finished,
-        // but continue to return the final chunk.
-        needManifestRefresh = true;
       }
     } else if (chunkIndex >= streamElement.chunkCount) {
       out.endOfStream = true;
