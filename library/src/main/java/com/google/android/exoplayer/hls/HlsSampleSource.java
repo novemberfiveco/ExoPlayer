@@ -346,6 +346,9 @@ public final class HlsSampleSource implements SampleSource, SampleSourceReader, 
     Assertions.checkState(prepared);
     Assertions.checkState(enabledTrackCount > 0);
 
+    // make sure we are not seeking behind the live window
+    positionUs = chunkSource.limitToliveEdge(positionUs);
+
     long currentPositionUs = isPendingReset() ? pendingResetPositionUs : downstreamPositionUs;
     downstreamPositionUs = positionUs;
     lastSeekPositionUs = positionUs;
