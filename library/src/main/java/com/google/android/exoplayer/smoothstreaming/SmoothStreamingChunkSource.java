@@ -127,6 +127,33 @@ public class SmoothStreamingChunkSource implements ChunkSource,
    */
   public SmoothStreamingChunkSource(ManifestFetcher<SmoothStreamingManifest> manifestFetcher,
       SmoothStreamingTrackSelector trackSelector, DataSource dataSource,
+      FormatEvaluator adaptiveFormatEvaluator, long liveEdgeLatencyMs) {
+    this(manifestFetcher, manifestFetcher.getManifest(), trackSelector, dataSource,
+        adaptiveFormatEvaluator, liveEdgeLatencyMs, null, null);
+  }
+
+  /**
+   * Constructor to use for live streaming.
+   * <p>
+   * May also be used for fixed duration content, in which case the call is equivalent to calling
+   * the other constructor, passing {@code manifestFetcher.getManifest()} is the first argument.
+   *
+   * @param manifestFetcher A fetcher for the manifest, which must have already successfully
+   *     completed an initial load.
+   * @param trackSelector Selects tracks from the manifest to be exposed by this source.
+   * @param dataSource A {@link DataSource} suitable for loading the media data.
+   * @param adaptiveFormatEvaluator For adaptive tracks, selects from the available formats.
+   * @param liveEdgeLatencyMs For live streams, the number of milliseconds that the playback should
+   *     lag behind the "live edge" (i.e. the end of the most recently defined media in the
+   *     manifest). Choosing a small value will minimize latency introduced by the player, however
+   *     note that the value sets an upper bound on the length of media that the player can buffer.
+   *     Hence a small value may increase the probability of rebuffering and playback failures.
+   * @param eventHandler A handler to use when delivering events to {@code EventListener}. May be
+   *     null if delivery of events is not required.
+   * @param eventListener A listener of events. May be null if delivery of events is not required.
+   */
+  public SmoothStreamingChunkSource(ManifestFetcher<SmoothStreamingManifest> manifestFetcher,
+      SmoothStreamingTrackSelector trackSelector, DataSource dataSource,
       FormatEvaluator adaptiveFormatEvaluator, long liveEdgeLatencyMs,
       Handler eventHandler, EventListener eventListener) {
     this(manifestFetcher, manifestFetcher.getManifest(), trackSelector, dataSource,
@@ -140,6 +167,24 @@ public class SmoothStreamingChunkSource implements ChunkSource,
    * @param trackSelector Selects tracks from the manifest to be exposed by this source.
    * @param dataSource A {@link DataSource} suitable for loading the media data.
    * @param adaptiveFormatEvaluator For adaptive tracks, selects from the available formats.
+   */
+  public SmoothStreamingChunkSource(SmoothStreamingManifest manifest,
+      SmoothStreamingTrackSelector trackSelector, DataSource dataSource,
+      FormatEvaluator adaptiveFormatEvaluator) {
+    this(null, manifest, trackSelector, dataSource, adaptiveFormatEvaluator, 0,
+      null, null);
+  }
+
+  /**
+   * Constructor to use for fixed duration content.
+   *
+   * @param manifest The manifest parsed from {@code baseUrl + "/Manifest"}.
+   * @param trackSelector Selects tracks from the manifest to be exposed by this source.
+   * @param dataSource A {@link DataSource} suitable for loading the media data.
+   * @param adaptiveFormatEvaluator For adaptive tracks, selects from the available formats.
+   * @param eventHandler A handler to use when delivering events to {@code EventListener}. May be
+   *     null if delivery of events is not required.
+   * @param eventListener A listener of events. May be null if delivery of events is not required.
    */
   public SmoothStreamingChunkSource(SmoothStreamingManifest manifest,
       SmoothStreamingTrackSelector trackSelector, DataSource dataSource,
