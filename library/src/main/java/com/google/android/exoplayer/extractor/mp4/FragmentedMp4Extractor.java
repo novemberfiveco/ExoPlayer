@@ -268,7 +268,7 @@ public final class FragmentedMp4Extractor implements Extractor {
     if (!containerAtoms.isEmpty()) {
       containerAtoms.peek().add(leaf);
     } else if (leaf.type == Atom.TYPE_sidx) {
-      ChunkIndex segmentIndex = parseSidx(leaf.data, inputPosition);
+      ChunkIndex segmentIndex = parseSidx(leaf.data, inputPosition, track == null ? 1 : track.timescale);
       extractorOutput.seekMap(segmentIndex);
       haveOutputSeekMap = true;
     }
@@ -616,7 +616,7 @@ public final class FragmentedMp4Extractor implements Extractor {
   /**
    * Parses a sidx atom (defined in 14496-12).
    */
-  private static ChunkIndex parseSidx(ParsableByteArray atom, long inputPosition)
+  private static ChunkIndex parseSidx(ParsableByteArray atom, long inputPosition, long trackTimescale)
       throws ParserException {
     atom.setPosition(Atom.HEADER_SIZE);
     int fullAtom = atom.readInt();
@@ -624,6 +624,12 @@ public final class FragmentedMp4Extractor implements Extractor {
 
     atom.skipBytes(4);
     long timescale = atom.readUnsignedInt();
+    if(timescale == 0) {
+      // If we hit an erroneous sidx timescale setting of 0 that will cause a
+      // division-by-zero exception below, we fallback to the tracks timescale.
+      // This comes from the mdhd box and should be consistent with the sidx entry
+      timescale = trackTimescale;
+    }
     long earliestPresentationTime;
     long offset = inputPosition;
     if (version == 0) {
