@@ -580,7 +580,7 @@ public class HlsChunkSource {
 
   private int getLiveEdgeIndex(int variantIndex) {
     HlsMediaPlaylist mediaPlaylist = variantPlaylists[variantIndex];
-    return mediaPlaylist.segments.size() > 20 ? mediaPlaylist.segments.size() - 20 : 0;
+    return mediaPlaylist.segments.size() > 3 ? mediaPlaylist.segments.size() - 3 : 0;
   }
 
   private int getLiveStartChunkMediaSequence(int variantIndex) {
