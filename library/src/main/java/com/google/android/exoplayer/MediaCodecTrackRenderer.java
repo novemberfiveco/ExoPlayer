@@ -540,7 +540,16 @@ public abstract class MediaCodecTrackRenderer extends SampleSourceTrackRenderer 
     }
 
     if (inputIndex < 0) {
-      inputIndex = codec.dequeueInputBuffer(0);
+      try {
+        inputIndex = codec.dequeueInputBuffer(0);
+      }catch (Exception e){
+        // Workaround for issue in Amazon FireTV which throws an
+        // 'android.media.MediaCodec$CodecException: Error 0xffffffea' exception here. We catch
+        // it and try to restart the decoder.
+        releaseCodec();
+        maybeInitCodec();
+        return false;
+      }
       if (inputIndex < 0) {
         return false;
       }
@@ -813,7 +822,16 @@ public abstract class MediaCodecTrackRenderer extends SampleSourceTrackRenderer 
     }
 
     if (outputIndex < 0) {
-      outputIndex = codec.dequeueOutputBuffer(outputBufferInfo, getDequeueOutputBufferTimeoutUs());
+      try {
+        outputIndex = codec.dequeueOutputBuffer(outputBufferInfo, getDequeueOutputBufferTimeoutUs());
+      }catch (Exception e){
+        // Workaround for issue in Amazon FireTV which throws an
+        // 'android.media.MediaCodec$CodecException: Error 0xffffffea' exception here. We catch
+        // it and try to restart the decoder.
+        releaseCodec();
+        maybeInitCodec();
+        return false;
+      }
     }
 
     if (outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
