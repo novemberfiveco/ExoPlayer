@@ -649,7 +649,9 @@ public class DashChunkSource implements ChunkSource, Output {
   }
 
   /* package */ static boolean mimeTypeIsRawText(String mimeType) {
-    return MimeTypes.TEXT_VTT.equals(mimeType) || MimeTypes.APPLICATION_TTML.equals(mimeType);
+    return MimeTypes.TEXT_VTT.equals(mimeType)
+            || MimeTypes.APPLICATION_TTML.equals(mimeType)
+            || MimeTypes.APPLICATION_DFXP.equals(mimeType);
   }
 
   private Chunk newInitializationChunk(RangedUri initializationUri, RangedUri indexUri,

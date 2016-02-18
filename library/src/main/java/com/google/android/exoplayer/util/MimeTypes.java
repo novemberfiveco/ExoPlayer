@@ -63,6 +63,7 @@ public final class MimeTypes {
   public static final String APPLICATION_EIA608 = BASE_TYPE_APPLICATION + "/eia-608";
   public static final String APPLICATION_SUBRIP = BASE_TYPE_APPLICATION + "/x-subrip";
   public static final String APPLICATION_TTML = BASE_TYPE_APPLICATION + "/ttml+xml";
+  public static final String APPLICATION_DFXP = BASE_TYPE_APPLICATION + "/ttaf+xml";
   public static final String APPLICATION_M3U8 = BASE_TYPE_APPLICATION + "/x-mpegURL";
   public static final String APPLICATION_TX3G = BASE_TYPE_APPLICATION + "/x-quicktime-tx3g";
 

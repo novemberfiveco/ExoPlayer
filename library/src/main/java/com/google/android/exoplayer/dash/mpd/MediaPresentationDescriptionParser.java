@@ -295,7 +295,9 @@ public class MediaPresentationDescriptionParser extends DefaultHandler
       return AdaptationSet.TYPE_VIDEO;
     } else if (MimeTypes.isAudio(mimeType)) {
       return AdaptationSet.TYPE_AUDIO;
-    } else if (MimeTypes.isText(mimeType) || MimeTypes.APPLICATION_TTML.equals(mimeType)) {
+    } else if (MimeTypes.isText(mimeType)
+      || MimeTypes.APPLICATION_TTML.equals(mimeType)
+      || MimeTypes.APPLICATION_DFXP.equals(mimeType)) {
       return AdaptationSet.TYPE_TEXT;
     } else if (MimeTypes.APPLICATION_MP4.equals(mimeType)) {
       // The representation uses mp4 but does not contain video or audio. Use codecs to determine
