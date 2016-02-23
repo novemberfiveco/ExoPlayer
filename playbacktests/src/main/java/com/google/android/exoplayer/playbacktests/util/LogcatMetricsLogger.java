@@ -13,26 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.google.android.exoplayer.metadata;
+package com.google.android.exoplayer.playbacktests.util;
+
+import android.os.Bundle;
+import android.util.Log;
 
 /**
- * A metadata that contains parsed ID3 GEOB (General Encapsulated Object) frame data associated
- * with time indices.
+ * Implementation of {@link MetricsLogger} that prints the metrics to logcat.
  */
-public final class GeobMetadata {
+public final class LogcatMetricsLogger implements MetricsLogger {
 
-  public static final String TYPE = "GEOB";
+  private final String tag;
 
-  public final String mimeType;
-  public final String filename;
-  public final String description;
-  public final byte[] data;
+  public LogcatMetricsLogger(String tag) {
+    this.tag = tag;
+  }
 
-  public GeobMetadata(String mimeType, String filename, String description, byte[] data) {
-    this.mimeType = mimeType;
-    this.filename = filename;
-    this.description = description;
-    this.data = data;
+  @Override
+  public void logMetrics(Bundle metrics) {
+    if (metrics != null) {
+      for (String key : metrics.keySet()) {
+        Log.v(tag, key + ": " + metrics.get(key).toString());
+      }
+    }
   }
 
 }
