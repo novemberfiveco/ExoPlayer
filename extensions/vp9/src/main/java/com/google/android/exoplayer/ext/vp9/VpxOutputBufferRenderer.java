@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 The Android Open Source Project
+ * Copyright (C) 2015 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,22 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.google.android.exoplayer.metadata;
+package com.google.android.exoplayer.ext.vp9;
 
 /**
- * A metadata that contains parsed ID3 PRIV (Private) frame data associated
- * with time indices.
+ * Renders the {@link VpxOutputBuffer}.
  */
-public final class PrivMetadata {
+public interface VpxOutputBufferRenderer {
 
-  public static final String TYPE = "PRIV";
-
-  public final String owner;
-  public final byte[] privateData;
-
-  public PrivMetadata(String owner, byte[] privateData) {
-    this.owner = owner;
-    this.privateData = privateData;
-  }
+  /**
+   * Sets the output buffer to be rendered. The renderer is responsible for releasing the buffer.
+   */
+  void setOutputBuffer(VpxOutputBuffer outputBuffer);
 
 }

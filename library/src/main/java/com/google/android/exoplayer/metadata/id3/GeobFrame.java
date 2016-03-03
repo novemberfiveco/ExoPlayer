@@ -13,22 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.google.android.exoplayer.metadata;
+package com.google.android.exoplayer.metadata.id3;
 
 /**
- * A metadata that contains parsed ID3 TXXX (User defined text information) frame data associated
- * with time indices.
+ * GEOB (General Encapsulated Object) ID3 frame.
  */
-public final class TxxxMetadata {
+public final class GeobFrame extends Id3Frame {
 
-  public static final String TYPE = "TXXX";
+  public static final String ID = "GEOB";
 
+  public final String mimeType;
+  public final String filename;
   public final String description;
-  public final String value;
+  public final byte[] data;
 
-  public TxxxMetadata(String description, String value) {
+  public GeobFrame(String mimeType, String filename, String description, byte[] data) {
+    super(ID);
+    this.mimeType = mimeType;
+    this.filename = filename;
     this.description = description;
-    this.value = value;
+    this.data = data;
   }
 
 }

@@ -33,10 +33,13 @@ import com.google.android.exoplayer.util.NalUnitUtil;
 import com.google.android.exoplayer.util.ParsableByteArray;
 import com.google.android.exoplayer.util.Util;
 
+import android.util.Log;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Stack;
+import java.util.UUID;
 
 /**
  * Facilitates the extraction of data from the fragmented mp4 container format.
@@ -44,6 +47,8 @@ import java.util.Stack;
  * This implementation only supports de-muxed (i.e. single track) streams.
  */
 public final class FragmentedMp4Extractor implements Extractor {
+
+  private static final String TAG = "FragmentedMp4Extractor";
 
   /**
    * Flag to work around an issue in some video streams where every frame is marked as a sync frame.
@@ -232,16 +237,19 @@ public final class FragmentedMp4Extractor implements Extractor {
       containerAtoms.add(new ContainerAtom(atomType, endPosition));
       enterReadingAtomHeaderState();
     } else if (shouldParseLeafAtom(atomType)) {
-      // We don't support parsing of leaf atoms that define extended atom sizes, or that have
-      // lengths greater than Integer.MAX_VALUE.
-      checkState(atomHeaderBytesRead == Atom.HEADER_SIZE);
-      checkState(atomSize <= Integer.MAX_VALUE);
+      if (atomHeaderBytesRead != Atom.HEADER_SIZE) {
+        throw new ParserException("Leaf atom defines extended atom size (unsupported).");
+      }
+      if (atomSize > Integer.MAX_VALUE) {
+        throw new ParserException("Leaf atom with length > 2147483647 (unsupported).");
+      }
       atomData = new ParsableByteArray((int) atomSize);
       System.arraycopy(atomHeader.data, 0, atomData.data, 0, Atom.HEADER_SIZE);
       parserState = STATE_READING_ATOM_PAYLOAD;
     } else {
-      // We don't support skipping of atoms that have lengths greater than Integer.MAX_VALUE.
-      checkState(atomSize <= Integer.MAX_VALUE);
+      if (atomSize > Integer.MAX_VALUE) {
+        throw new ParserException("Skipping atom with length > 2147483647 (unsupported).");
+      }
       atomData = null;
       parserState = STATE_READING_ATOM_PAYLOAD;
     }
@@ -296,8 +304,13 @@ public final class FragmentedMp4Extractor implements Extractor {
           drmInitData = new DrmInitData.Mapped();
         }
         byte[] psshData = child.data.data;
-        drmInitData.put(PsshAtomUtil.parseUuid(psshData),
-            new SchemeInitData(MimeTypes.VIDEO_MP4, psshData));
+        UUID uuid = PsshAtomUtil.parseUuid(psshData);
+        if (uuid == null) {
+          Log.w(TAG, "Skipped pssh atom (failed to extract uuid)");
+        } else {
+          drmInitData.put(PsshAtomUtil.parseUuid(psshData),
+              new SchemeInitData(MimeTypes.VIDEO_MP4, psshData));
+        }
       }
     }
     if (drmInitData != null) {
@@ -308,7 +321,9 @@ public final class FragmentedMp4Extractor implements Extractor {
     extendsDefaults = parseTrex(mvex.getLeafAtomOfType(Atom.TYPE_trex).data);
     track = AtomParsers.parseTrak(moov.getContainerAtomOfType(Atom.TYPE_trak),
         moov.getLeafAtomOfType(Atom.TYPE_mvhd), false);
-    checkState(track != null);
+    if (track == null) {
+      throw new ParserException("Track type not supported.");
+    }
     trackOutput.format(track.mediaFormat);
   }
 
@@ -316,18 +331,6 @@ public final class FragmentedMp4Extractor implements Extractor {
     fragmentRun.reset();
     parseMoof(track, extendsDefaults, moof, fragmentRun, workaroundFlags, extendedTypeScratch);
     sampleIndex = 0;
-  }
-
-  private static void checkState(boolean expression) throws ParserException {
-    if (!expression) {
-      throw new ParserException();
-    }
-  }
-
-  private static void checkState(boolean expression, String errorMessage) throws ParserException {
-    if (!expression) {
-      throw new ParserException(errorMessage);
-    }
   }
 
   /**
@@ -346,8 +349,9 @@ public final class FragmentedMp4Extractor implements Extractor {
   private static void parseMoof(Track track, DefaultSampleValues extendsDefaults,
       ContainerAtom moof, TrackFragment out, int workaroundFlags, byte[] extendedTypeScratch)
       throws ParserException {
-    // This extractor only supports one traf per moof.
-    checkState(1 == moof.getChildAtomOfTypeCount(Atom.TYPE_traf));
+    if (moof.getChildAtomOfTypeCount(Atom.TYPE_traf) != 1) {
+      throw new ParserException("Traf count in moof != 1 (unsupported).");
+    }
     parseTraf(track, extendsDefaults, moof.getContainerAtomOfType(Atom.TYPE_traf),
         out, workaroundFlags, extendedTypeScratch);
   }
@@ -358,8 +362,9 @@ public final class FragmentedMp4Extractor implements Extractor {
   private static void parseTraf(Track track, DefaultSampleValues extendsDefaults,
       ContainerAtom traf, TrackFragment out, int workaroundFlags, byte[] extendedTypeScratch)
       throws ParserException {
-    // This extractor only supports one trun per traf.
-    checkState(1 == traf.getChildAtomOfTypeCount(Atom.TYPE_trun));
+    if (traf.getChildAtomOfTypeCount(Atom.TYPE_trun) != 1) {
+      throw new ParserException("Trun count in traf != 1 (unsupported).");
+    }
     LeafAtom tfdtAtom = traf.getLeafAtomOfType(Atom.TYPE_tfdt);
     long decodeTime;
     if (tfdtAtom == null || (workaroundFlags & WORKAROUND_IGNORE_TFDT_BOX) != 0) {
@@ -535,6 +540,17 @@ public final class FragmentedMp4Extractor implements Extractor {
     boolean sampleCompositionTimeOffsetsPresent =
         (flags & 0x800 /* sample_composition_time_offsets_present */) != 0;
 
+    // Offset to the entire video timeline. In the presence of B-frames this is usually used to
+    // ensure that the first frame's presentation timestamp is zero.
+    long edtsOffset = 0;
+
+    // Currently we only support a single edit that moves the entire media timeline (indicated by
+    // duration == 0). Other uses of edit lists are uncommon and unsupported.
+    if (track.editListDurations != null && track.editListDurations.length == 1
+        && track.editListDurations[0] == 0) {
+      edtsOffset = Util.scaleLargeTimestamp(track.editListMediaTimes[0], 1000, track.timescale);
+    }
+
     out.initTables(sampleCount);
     int[] sampleSizeTable = out.sampleSizeTable;
     int[] sampleCompositionTimeOffsetTable = out.sampleCompositionTimeOffsetTable;
@@ -563,7 +579,8 @@ public final class FragmentedMp4Extractor implements Extractor {
       } else {
         sampleCompositionTimeOffsetTable[i] = 0;
       }
-      sampleDecodingTimeTable[i] = Util.scaleLargeTimestamp(cumulativeTime, 1000, timescale);
+      sampleDecodingTimeTable[i] =
+          Util.scaleLargeTimestamp(cumulativeTime, 1000, timescale) - edtsOffset;
       sampleSizeTable[i] = sampleSize;
       sampleIsSyncFrameTable[i] = ((sampleFlags >> 16) & 0x1) == 0
           && (!workaroundEveryVideoFrameIsSyncFrame || i == 0);
@@ -659,7 +676,7 @@ public final class FragmentedMp4Extractor implements Extractor {
       }
       long referenceDuration = atom.readUnsignedInt();
 
-      sizes[i] = 0x7fffffff & firstInt;
+      sizes[i] = 0x7FFFFFFF & firstInt;
       offsets[i] = offset;
 
       // Calculate time and duration values such that any rounding errors are consistent. i.e. That
@@ -678,7 +695,9 @@ public final class FragmentedMp4Extractor implements Extractor {
 
   private void readEncryptionData(ExtractorInput input) throws IOException, InterruptedException {
     int bytesToSkip = (int) (fragmentRun.auxiliaryDataPosition - input.getPosition());
-    checkState(bytesToSkip >= 0, "Offset to encryption data was negative.");
+    if (bytesToSkip < 0) {
+      throw new ParserException("Offset to encryption data was negative.");
+    }
     input.skipFully(bytesToSkip);
     fragmentRun.fillEncryptionData(input);
     parserState = STATE_READING_SAMPLE_START;
@@ -699,22 +718,26 @@ public final class FragmentedMp4Extractor implements Extractor {
    * @throws InterruptedException If the thread is interrupted.
    */
   private boolean readSample(ExtractorInput input) throws IOException, InterruptedException {
-    if (sampleIndex == 0) {
-      int bytesToSkip = (int) (fragmentRun.dataPosition - input.getPosition());
-      checkState(bytesToSkip >= 0, "Offset to sample data was negative.");
-      input.skipFully(bytesToSkip);
-    }
-
-    if (sampleIndex >= fragmentRun.length) {
-      int bytesToSkip = (int) (endOfMdatPosition - input.getPosition());
-      checkState(bytesToSkip >= 0, "Offset to end of mdat was negative.");
-      input.skipFully(bytesToSkip);
-      // We've run out of samples in the current mdat atom.
-      enterReadingAtomHeaderState();
-      return false;
-    }
-
     if (parserState == STATE_READING_SAMPLE_START) {
+      if (sampleIndex == fragmentRun.length) {
+        // We've run out of samples in the current mdat. Discard any trailing data and prepare to
+        // read the header of the next atom.
+        int bytesToSkip = (int) (endOfMdatPosition - input.getPosition());
+        if (bytesToSkip < 0) {
+          throw new ParserException("Offset to end of mdat was negative.");
+        }
+        input.skipFully(bytesToSkip);
+        enterReadingAtomHeaderState();
+        return false;
+      }
+      if (sampleIndex == 0) {
+        // We're reading the first sample in the current mdat. Discard any preceding data.
+        int bytesToSkip = (int) (fragmentRun.dataPosition - input.getPosition());
+        if (bytesToSkip < 0) {
+          throw new ParserException("Offset to sample data was negative.");
+        }
+        input.skipFully(bytesToSkip);
+      }
       sampleSize = fragmentRun.sampleSizeTable[sampleIndex];
       if (fragmentRun.definesEncryptionData) {
         sampleBytesWritten = appendSampleEncryptionData(fragmentRun.sampleEncryptionData);
@@ -807,14 +830,15 @@ public final class FragmentedMp4Extractor implements Extractor {
         || atom == Atom.TYPE_sidx || atom == Atom.TYPE_stsd || atom == Atom.TYPE_tfdt
         || atom == Atom.TYPE_tfhd || atom == Atom.TYPE_tkhd || atom == Atom.TYPE_trex
         || atom == Atom.TYPE_trun || atom == Atom.TYPE_pssh || atom == Atom.TYPE_saiz
-        || atom == Atom.TYPE_saio || atom == Atom.TYPE_senc || atom == Atom.TYPE_uuid;
+        || atom == Atom.TYPE_saio || atom == Atom.TYPE_senc || atom == Atom.TYPE_uuid
+        || atom == Atom.TYPE_elst;
   }
 
   /** Returns whether the extractor should parse a container atom with type {@code atom}. */
   private static boolean shouldParseContainerAtom(int atom) {
     return atom == Atom.TYPE_moov || atom == Atom.TYPE_trak || atom == Atom.TYPE_mdia
         || atom == Atom.TYPE_minf || atom == Atom.TYPE_stbl || atom == Atom.TYPE_moof
-        || atom == Atom.TYPE_traf || atom == Atom.TYPE_mvex;
+        || atom == Atom.TYPE_traf || atom == Atom.TYPE_mvex || atom == Atom.TYPE_edts;
   }
 
 }
