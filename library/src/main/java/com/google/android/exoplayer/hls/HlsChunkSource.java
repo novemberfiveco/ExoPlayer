@@ -730,7 +730,7 @@ public class HlsChunkSource implements HlsTrackSelector.Output {
   private long getLiveEdgeUs(int variantIndex) {
     HlsMediaPlaylist mediaPlaylist = variantPlaylists[variantIndex];
     int size = mediaPlaylist.segments.size();
-    return size > 3 ? mediaPlaylist.segments.get(size - 20).startTimeUs : 0;
+    return size > 3 ? mediaPlaylist.segments.get(size - 3).startTimeUs : 0;
   }
 
   private int getLiveEdgeIndex(int variantIndex) {
